@@ -11,15 +11,20 @@ use crate::renderer::Renderer;
 
 pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
+    repaint_requested: &'a mut bool,
     close_requested: &'a mut bool,
 }
 
 impl<'a> Queue<'a> {
-    pub(crate) fn new(bg_color: &'a mut Rgba, close_requested: &'a mut bool) -> Self {
+    pub(crate) fn new(
+        bg_color: &'a mut Rgba,
+        repaint_requested: &'a mut bool,
+        close_requested: &'a mut bool,
+    ) -> Self {
         Self {
             bg_color,
             //renderer,
-            //repaint_requested,
+            repaint_requested,
             close_requested,
         }
     }
@@ -27,6 +32,11 @@ impl<'a> Queue<'a> {
     /// Set the background color.
     pub fn bg_color(&mut self, bg_color: Rgba) {
         *self.bg_color = bg_color;
+    }
+
+    /// Request to repaint the UI on the next frame.
+    pub fn request_repaint(&mut self) {
+        *self.repaint_requested = true;
     }
 
     /// Close the window.
@@ -133,11 +143,12 @@ where
         let renderer = Renderer::new(window);
 
         let mut bg_color = Rgba::BLACK;
+        let mut repaint_requested = false;
         let mut close_requested = false;
         let mut queue = Queue::new(
             &mut bg_color,
             //&mut renderer,
-            //&mut repaint_requested,
+            &mut repaint_requested,
             &mut close_requested,
         );
         (build)(&egui_ctx, &mut queue, &mut state);
@@ -285,11 +296,11 @@ where
             self.egui_input.time = Some(self.start_time.elapsed().as_nanos() as f64 * 1e-9);
             self.egui_ctx.begin_frame(self.egui_input.take());
 
-            //let mut repaint_requested = false;
+            let mut repaint_requested = false;
             let mut queue = Queue::new(
                 &mut self.bg_color,
                 //&mut self.renderer,
-                //&mut repaint_requested,
+                &mut repaint_requested,
                 &mut self.close_requested,
             );
 
@@ -303,11 +314,12 @@ where
             } = self.egui_ctx.end_frame();
 
             let now = Instant::now();
-            let do_repaint_now = if let Some(t) = self.repaint_after {
-                now >= t || repaint_after.is_zero()
-            } else {
-                repaint_after.is_zero()
-            };
+            let do_repaint_now = repaint_requested
+                || if let Some(t) = self.repaint_after {
+                    now >= t || repaint_after.is_zero()
+                } else {
+                    repaint_after.is_zero()
+                };
 
             if do_repaint_now {
                 self.renderer.render(
